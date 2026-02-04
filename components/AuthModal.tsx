@@ -1,14 +1,21 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Loader2, AlertCircle, Phone, User, ShieldCheck } from "lucide-react";
+import {
+  X,
+  Loader2,
+  AlertCircle,
+  Phone,
+  User,
+  ShieldCheck,
+} from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/components/contexts/AuthContext";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import ReCAPTCHA from "react-google-recaptcha";
 
-const RECAPTCHA_SITE_KEY = "6LccmU0sAAAAADUwBGUdIFu8vWLz7uGHYZ2qO6i4";
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -78,13 +85,16 @@ export default function AuthModal({
       }
       return {
         values: {},
-        errors: result.error.issues.reduce((acc, issue) => {
-          const path = issue.path.join(".");
-          if (!acc[path]) {
-            acc[path] = { type: issue.code, message: issue.message };
-          }
-          return acc;
-        }, {} as Record<string, { type: string; message: string }>),
+        errors: result.error.issues.reduce(
+          (acc, issue) => {
+            const path = issue.path.join(".");
+            if (!acc[path]) {
+              acc[path] = { type: issue.code, message: issue.message };
+            }
+            return acc;
+          },
+          {} as Record<string, { type: string; message: string }>,
+        ),
       };
     },
     mode: "onChange",
@@ -111,13 +121,16 @@ export default function AuthModal({
       }
       return {
         values: {},
-        errors: result.error.issues.reduce((acc, issue) => {
-          const path = issue.path.join(".");
-          if (!acc[path]) {
-            acc[path] = { type: issue.code, message: issue.message };
-          }
-          return acc;
-        }, {} as Record<string, { type: string; message: string }>),
+        errors: result.error.issues.reduce(
+          (acc, issue) => {
+            const path = issue.path.join(".");
+            if (!acc[path]) {
+              acc[path] = { type: issue.code, message: issue.message };
+            }
+            return acc;
+          },
+          {} as Record<string, { type: string; message: string }>,
+        ),
       };
     },
     mode: "onChange",
@@ -458,7 +471,7 @@ export default function AuthModal({
                             value={field.value}
                             onChange={(e) => {
                               const formattedValue = formatPhoneInput(
-                                e.target.value
+                                e.target.value,
                               );
                               field.onChange(formattedValue);
                             }}
@@ -482,14 +495,16 @@ export default function AuthModal({
                       <p className="text-xs text-gray-500 mt-1 sm:mt-2">
                         {"We'll send an OTP to this number for verification"}
                       </p>
-                  )}
+                    )}
                   </div>
 
                   {/* Google reCAPTCHA */}
                   <div className="flex flex-col items-center">
                     <div className="flex items-center gap-2 mb-2">
                       <ShieldCheck className="w-4 h-4 text-gray-500" />
-                      <span className="text-xs text-gray-500">Security verification</span>
+                      <span className="text-xs text-gray-500">
+                        Security verification
+                      </span>
                     </div>
                     <div className="transform scale-[0.85] sm:scale-100 origin-center">
                       <ReCAPTCHA
@@ -507,11 +522,11 @@ export default function AuthModal({
                       </p>
                     )}
                   </div>
-                  
+
                   <button
-                  type="submit"
-                  disabled={!isPhoneNameValid || !recaptchaToken || isLoading}
-                  className="w-full bg-gradient-to-r from-rose-400 to-amber-400 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow text-sm sm:text-base"
+                    type="submit"
+                    disabled={!isPhoneNameValid || !recaptchaToken || isLoading}
+                    className="w-full bg-gradient-to-r from-rose-400 to-amber-400 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow text-sm sm:text-base"
                   >
                     {isLoading ? (
                       <>
