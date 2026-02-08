@@ -11,24 +11,6 @@ export const metadata: Metadata = {
   title: "Moments - Find Your Wedding Photos",
   description:
     "Upload your selfie and instantly discover all the beautiful moments captured of you at the wedding. Powered by advanced facial recognition technology.",
-  generator: "openshare.app",
-  icons: {
-    icon: [
-      {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
-      },
-    ],
-    apple: "/apple-icon.png",
-  },
 };
 
 export default function RootLayout({
