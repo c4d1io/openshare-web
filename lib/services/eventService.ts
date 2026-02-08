@@ -46,7 +46,7 @@ export const eventService = {
     const mockApiUrl = "https://mocki.io/v1/6cc6e980-6690-4d08-89f5-dc31c35513aa";
     
     // Console log payload for testing
-    console.log("[v0] Create Event Payload:", JSON.stringify(payload, null, 2));
+    console.log("Create Event Payload:", JSON.stringify(payload, null, 2));
 
     const response = await fetch(mockApiUrl);
     
@@ -59,7 +59,7 @@ export const eventService = {
     // });
     
     const result = await response.json();
-    console.log("[v0] Create Event Response:", result);
+    console.log("Create Event Response:", result);
     
     return result;
   },
@@ -101,7 +101,7 @@ export const eventService = {
     // Production API: https://moments-api.moibook.in/api/uploads/init
     const apiUrl = "https://mocki.io/v1/f308b612-5746-44d1-ae89-4fd723e26c55";
     
-    console.log("[v0] Upload Init Payload:", JSON.stringify(payload, null, 2));
+    console.log("Upload Init Payload:", JSON.stringify(payload, null, 2));
     
     // For testing, generate mock response with fake upload URLs
     // const response = await fetch(apiUrl, {
@@ -119,7 +119,7 @@ export const eventService = {
     }
     
     const result = await response.json();
-    console.log("[v0] Upload Init Response:", result);
+    console.log("Upload Init Response:", result);
     return result;
   },
 
@@ -165,7 +165,7 @@ export const eventService = {
 
     const apiUrl = "https://mocki.io/v1/c76dbf8b-2949-40f3-92e7-1df327ca6174";
     
-    console.log("[v0] Upload Complete Payload:", JSON.stringify(payload, null, 2));
+    console.log("Upload Complete Payload:", JSON.stringify(payload, null, 2));
     
     // For testing, generate mock response
     // TODO: Replace with actual API call
@@ -192,7 +192,7 @@ export const eventService = {
     }
 
     const result = await response.json();
-    console.log("[v0] Upload Complete Response:", result);
+    console.log("Upload Complete Response:", result);
     return result;
   },
 };
