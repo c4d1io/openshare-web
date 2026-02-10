@@ -27,6 +27,16 @@ import {
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/components/contexts/AuthContext";
 import { eventService } from "@/lib/services/eventService";
+import {
+  getCertificateList,
+  imageUrlToBase64,
+  injectQRCodeIntoSVG,
+  fetchCertificateSVG,
+  extractTemplateVariables,
+  replaceTemplateVariables,
+  type CertificateTemplate,
+  type TemplateVariable,
+} from "@/lib/services/certificateService";
 import type { MediaItem, UploadInitFileResponse } from "@/lib/types/event";
 
 interface EventDetailPageProps {
@@ -62,6 +72,18 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
   // QR Code state
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [isLoadingQR, setIsLoadingQR] = useState(false);
+
+  // Certificate state
+  const certificates = getCertificateList();
+  const [selectedCertificate, setSelectedCertificate] = useState<CertificateTemplate>(certificates[0]);
+  const [certificateSvgContent, setCertificateSvgContent] = useState<string | null>(null);
+  const [isLoadingCertificate, setIsLoadingCertificate] = useState(false);
+  const [qrBase64, setQrBase64] = useState<string | null>(null);
+  const [rawSvgText, setRawSvgText] = useState<string | null>(null);
+  const [templateVariables, setTemplateVariables] = useState<TemplateVariable[]>([]);
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+  const [thumbnailSvgs, setThumbnailSvgs] = useState<Record<string, string>>({});
   
   // Media viewer state
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
@@ -127,12 +149,54 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
     try {
       const response = await eventService.getEventQRCode(eventId);
       setQrCodeUrl(response.qr_code);
+
+      // Convert QR image URL to base64
+      try {
+        const base64 = await imageUrlToBase64(response.qr_code);
+        setQrBase64(base64);
+      } catch (b64Error) {
+        console.error("Failed to convert QR to base64:", b64Error);
+      }
     } catch (error) {
       console.error("Failed to fetch QR code:", error);
     } finally {
       setIsLoadingQR(false);
     }
   }, [eventId]);
+
+  const processCertificate = useCallback(async (cert: CertificateTemplate) => {
+    setIsLoadingCertificate(true);
+    try {
+      const svgText = await fetchCertificateSVG(cert.path);
+      setRawSvgText(svgText);
+
+      // Extract template variables and set default form values
+      const vars = extractTemplateVariables(svgText);
+      setTemplateVariables(vars);
+
+      const defaults: Record<string, string> = {};
+      for (const v of vars) {
+        defaults[v.key] = v.defaultValue;
+      }
+      setFormValues(defaults);
+      setTouchedFields({});
+    } catch (error) {
+      console.error("Failed to process certificate:", error);
+      setRawSvgText(null);
+      setCertificateSvgContent(null);
+    } finally {
+      setIsLoadingCertificate(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!rawSvgText) return;
+    let svg = replaceTemplateVariables(rawSvgText, formValues);
+    if (qrBase64) {
+      svg = injectQRCodeIntoSVG(svg, qrBase64);
+    }
+    setCertificateSvgContent(svg);
+  }, [rawSvgText, formValues, qrBase64]);
 
   // Initial data fetch
   useEffect(() => {
@@ -145,6 +209,45 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
       fetchQRCode();
     }
   }, [activeTab, qrCodeUrl, fetchQRCode]);
+
+  // Process certificate when selection changes
+  useEffect(() => {
+    if (selectedCertificate) {
+      processCertificate(selectedCertificate);
+    }
+  }, [selectedCertificate, processCertificate]);
+
+  // Prefetch thumbnail SVGs for selector
+  useEffect(() => {
+    const loadThumbnails = async () => {
+      const svgs: Record<string, string> = {};
+      for (const cert of certificates) {
+        try {
+          const svg = await fetchCertificateSVG(cert.path);
+          svgs[cert.id] = svg;
+        } catch {
+          // Skip failed thumbnails
+        }
+      }
+      setThumbnailSvgs(svgs);
+    };
+    loadThumbnails();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Download certificate as SVG file
+  const downloadCertificate = () => {
+    if (!certificateSvgContent) return;
+    const blob = new Blob([certificateSvgContent], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${selectedCertificate.id}-event-${eventId}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Helper to determine if media is video
   const isVideo = (url: string): boolean => {
@@ -731,60 +834,209 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                     transition={{ duration: 0.3 }}
                   >
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">Event QR Code</h2>
-                      <p className="text-gray-500 mt-1">Share this code for guests to upload media</p>
+                      <h2 className="text-2xl font-bold text-gray-900">Event Certificate</h2>
+                      <p className="text-gray-500 mt-1">Choose a certificate template with your event QR code</p>
                     </div>
 
-                    <div className="max-w-lg mx-auto">
-                      <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                        <div className="bg-gradient-to-r from-rose-400 to-amber-400 px-8 py-10 text-center text-white">
-                          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
-                            <QrCode className="w-9 h-9 text-white" />
-                          </div>
-                          <h3 className="text-2xl font-bold mb-2">Scan to Share Moments</h3>
-                          <p className="text-white/90 text-sm max-w-sm mx-auto">
-                            Guests can scan this QR code to upload their photos and videos
-                          </p>
-                        </div>
+                    {/* Certificate Template Thumbnail Selector */}
+                    <div className="mb-6">
+                      <p className="text-sm font-medium text-gray-700 mb-3">Select Template</p>
+                      <div className="flex space-x-4 overflow-x-auto pb-3">
+                        {certificates.map((cert) => {
+                          const isSelected = selectedCertificate.id === cert.id;
+                          return (
+                            <motion.button
+                              key={cert.id}
+                              onClick={() => setSelectedCertificate(cert)}
+                              className={`flex-shrink-0 rounded-xl border-2 transition-all overflow-hidden ${
+                                isSelected
+                                  ? "border-rose-400 shadow-lg shadow-rose-100 ring-2 ring-rose-200"
+                                  : "border-gray-200 hover:border-gray-300 hover:shadow-md"
+                              }`}
+                              whileHover={{ scale: 1.03 }}
+                              whileTap={{ scale: 0.97 }}
+                              style={{ width: 160 }}
+                            >
+                              {/* Thumbnail Preview */}
+                              <div className="w-full bg-gray-50 overflow-hidden" style={{ height: 110 }}>
+                                {thumbnailSvgs[cert.id] ? (
+                                  <div
+                                    className="certificate-thumbnail"
+                                    dangerouslySetInnerHTML={{ __html: thumbnailSvgs[cert.id] }}
+                                  />
+                                ) : (
+                                  <div className="flex items-center justify-center h-full">
+                                    <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+                                  </div>
+                                )}
+                              </div>
+                              {/* Label */}
+                              <div className={`px-3 py-2.5 text-center text-xs font-semibold ${
+                                isSelected
+                                  ? "bg-gradient-to-r from-rose-50 to-amber-50 text-rose-700"
+                                  : "bg-white text-gray-600"
+                              }`}>
+                                {cert.name}
+                              </div>
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                        <div className="p-8">
-                          {isLoadingQR ? (
-                            <div className="flex items-center justify-center py-12">
-                              <Loader2 className="w-8 h-8 animate-spin text-rose-400" />
+                    {/* Two-Column Layout: Preview + Form */}
+                    <div className="flex flex-col md:flex-row gap-6">
+                      {/* Left: Certificate Preview */}
+                      <div className="md:w-3/5 w-full">
+                        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                          <div className="bg-gradient-to-r from-rose-400 to-amber-400 px-6 py-4 flex items-center justify-between">
+                            <div className="flex items-center space-x-3 text-white">
+                              <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                                <QrCode className="w-4 h-4 text-white" />
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-base">Preview</h3>
+                                <p className="text-white/80 text-xs">{selectedCertificate.name}</p>
+                              </div>
                             </div>
-                          ) : qrCodeUrl ? (
-                            <div className="text-center">
-                              <div className="inline-block p-4 bg-white rounded-xl shadow-md border border-gray-100">
-                                <img
-                                  src={qrCodeUrl || "/placeholder.svg"}
-                                  alt="Event QR Code"
-                                  className="w-48 h-48"
+
+                            {certificateSvgContent && (
+                              <motion.button
+                                onClick={downloadCertificate}
+                                className="flex items-center space-x-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm text-white rounded-lg font-medium text-xs hover:bg-white/30 transition-colors"
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Download</span>
+                              </motion.button>
+                            )}
+                          </div>
+
+                          <div className="p-4">
+                            {isLoadingQR || isLoadingCertificate ? (
+                              <div className="flex flex-col items-center justify-center py-16">
+                                <Loader2 className="w-8 h-8 animate-spin text-rose-400 mb-3" />
+                                <p className="text-sm text-gray-500">
+                                  {isLoadingQR ? "Loading QR code..." : "Processing certificate..."}
+                                </p>
+                              </div>
+                            ) : certificateSvgContent ? (
+                              <div className="w-full overflow-auto rounded-lg border border-gray-100">
+                                <div
+                                  className="certificate-preview"
+                                  style={{ maxHeight: "70vh" }}
+                                  dangerouslySetInnerHTML={{ __html: certificateSvgContent }}
                                 />
                               </div>
-                              <div className="mt-6 flex justify-center space-x-3">
+                            ) : qrCodeUrl && !qrBase64 ? (
+                              <div className="text-center py-12">
+                                <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                  <AlertCircle className="w-8 h-8 text-amber-500" />
+                                </div>
+                                <p className="text-gray-600 mb-2 font-medium">Could not process QR code image</p>
+                                <p className="text-gray-400 text-sm mb-4">The QR code URL may have CORS restrictions</p>
                                 <motion.button
-                                  onClick={() => handleDownload(qrCodeUrl, `event-${eventId}-qr.png`)}
-                                  className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-rose-400 to-amber-400 text-white rounded-lg font-medium shadow-md"
+                                  onClick={fetchQRCode}
+                                  className="text-rose-500 font-medium text-sm"
+                                  whileHover={{ scale: 1.05 }}
+                                >
+                                  Try Again
+                                </motion.button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-12">
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                  <QrCode className="w-8 h-8 text-gray-400" />
+                                </div>
+                                <p className="text-gray-500 mb-4">Failed to load QR code</p>
+                                <motion.button
+                                  onClick={fetchQRCode}
+                                  className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-rose-400 to-amber-400 text-white rounded-lg font-medium shadow-md"
                                   whileHover={{ scale: 1.05 }}
                                   whileTap={{ scale: 0.95 }}
                                 >
-                                  <Download className="w-4 h-4" />
-                                  <span>Download</span>
+                                  <RefreshCw className="w-4 h-4" />
+                                  <span>Try Again</span>
                                 </motion.button>
                               </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Dynamic Form Fields */}
+                      <div className="md:w-2/5 w-full">
+                        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                          <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-4 flex items-center space-x-3">
+                            <div className="w-9 h-9 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                              <FileImage className="w-4 h-4 text-white" />
                             </div>
-                          ) : (
-                            <div className="text-center py-8">
-                              <p className="text-gray-500 mb-4">Failed to load QR code</p>
-                              <motion.button
-                                onClick={fetchQRCode}
-                                className="text-rose-500 font-medium"
-                                whileHover={{ scale: 1.05 }}
-                              >
-                                Try Again
-                              </motion.button>
+                            <div>
+                              <h3 className="font-bold text-base text-white">Certificate Details</h3>
+                              <p className="text-white/60 text-xs">Fill in all required fields</p>
                             </div>
-                          )}
+                          </div>
+
+                          <div className="p-5 space-y-5">
+                            {templateVariables.length > 0 ? (
+                              templateVariables.map((variable) => {
+                                const value = formValues[variable.key] ?? "";
+                                const isTouched = touchedFields[variable.key];
+                                const isEmpty = isTouched && value.trim() === "";
+                                return (
+                                  <div key={variable.key}>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                      {variable.label}
+                                      <span className="text-rose-400 ml-0.5">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={value}
+                                      maxLength={variable.maxCharacters}
+                                      placeholder={variable.defaultValue || `Enter ${variable.label.toLowerCase()}`}
+                                      onChange={(e) =>
+                                        setFormValues((prev) => ({
+                                          ...prev,
+                                          [variable.key]: e.target.value,
+                                        }))
+                                      }
+                                      onBlur={() =>
+                                        setTouchedFields((prev) => ({
+                                          ...prev,
+                                          [variable.key]: true,
+                                        }))
+                                      }
+                                      className={`w-full px-4 py-2.5 rounded-lg border text-sm transition-all duration-200 outline-none ${
+                                        isEmpty
+                                          ? "border-rose-300 bg-rose-50/50 focus:ring-2 focus:ring-rose-200 focus:border-rose-400"
+                                          : "border-gray-200 bg-gray-50 focus:ring-2 focus:ring-rose-200 focus:border-rose-400 focus:bg-white"
+                                      }`}
+                                    />
+                                    <div className="flex items-center justify-between mt-1">
+                                      {isEmpty ? (
+                                        <p className="text-xs text-rose-500">This field is required</p>
+                                      ) : (
+                                        <span />
+                                      )}
+                                      <p className="text-xs text-gray-400">
+                                        {value.length}/{variable.maxCharacters}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : isLoadingCertificate ? (
+                              <div className="flex flex-col items-center justify-center py-12">
+                                <Loader2 className="w-6 h-6 animate-spin text-gray-300 mb-2" />
+                                <p className="text-sm text-gray-400">Loading fields...</p>
+                              </div>
+                            ) : (
+                              <div className="text-center py-12">
+                                <p className="text-sm text-gray-400">No custom fields for this template</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -21,7 +21,7 @@ export const eventService = {
     // TODO: Remove mock API and uncomment production API after deployment
     // Production API: https://moments-api.moibook.in/api/event-categories?limit=${limit}&offset=${offset}
     const mockApiUrl = "https://mocki.io/v1/1e409515-cd4d-49d1-9876-163730fa2c24";
-    
+
     const response = await fetch(mockApiUrl);
     return response.json();
   },
@@ -34,7 +34,7 @@ export const eventService = {
     // TODO: Remove mock API and uncomment production API after deployment
     // Production API: https://moments-api.moibook.in/api/all-events?limit=${limit}&offset=${offset}
     const mockApiUrl = "https://mocki.io/v1/cc326f61-e376-4dcd-b50d-59476aa23d31";
-    
+
     const response = await fetch(mockApiUrl);
     return response.json();
   },
@@ -44,12 +44,12 @@ export const eventService = {
     // TODO: Remove mock API and uncomment production API after deployment
     // Production API: https://moments-api.moibook.in/api/create-event
     const mockApiUrl = "https://mocki.io/v1/6cc6e980-6690-4d08-89f5-dc31c35513aa";
-    
+
     // Console log payload for testing
     console.log("Create Event Payload:", JSON.stringify(payload, null, 2));
 
     const response = await fetch(mockApiUrl);
-    
+
     // const response = await fetch(mockApiUrl, {
     //   method: "POST",
     //   headers: {
@@ -57,10 +57,10 @@ export const eventService = {
     //   },
     //   body: JSON.stringify(payload),
     // });
-    
+
     const result = await response.json();
     console.log("Create Event Response:", result);
-    
+
     return result;
   },
 
@@ -73,7 +73,7 @@ export const eventService = {
     // TODO: Remove mock API and uncomment production API after deployment
     // Production API: https://moments-api.moibook.in/api/event/${eventId}?limit=${limit}&offset=${offset}
     const mockApiUrl = "https://mocki.io/v1/6dd0c70e-dd2e-42f1-815c-d9ba511706ab";
-    
+
     const response = await fetch(mockApiUrl);
     return response.json();
   },
@@ -82,8 +82,8 @@ export const eventService = {
   async getEventQRCode(eventId: string): Promise<EventQRCodeResponse> {
     // TODO: Remove mock API and uncomment production API after deployment
     // Production API: https://moments-api.moibook.in/api/event/${eventId}/qr-code
-    const mockApiUrl = "https://mocki.io/v1/bd5589a5-3ddd-4fad-975c-6ee40c2f7fd1";
-    
+    const mockApiUrl = "https://mocki.io/v1/271fb6af-abbf-4756-8024-0206a1e27b7a";
+
     const response = await fetch(mockApiUrl);
     return response.json();
   },
@@ -100,9 +100,9 @@ export const eventService = {
     // TODO: Remove mock API and uncomment production API after deployment
     // Production API: https://moments-api.moibook.in/api/uploads/init
     const apiUrl = "https://mocki.io/v1/f308b612-5746-44d1-ae89-4fd723e26c55";
-    
+
     console.log("Upload Init Payload:", JSON.stringify(payload, null, 2));
-    
+
     // For testing, generate mock response with fake upload URLs
     // const response = await fetch(apiUrl, {
     //   method: "POST",
@@ -117,7 +117,7 @@ export const eventService = {
     if (!response.ok) {
       throw new Error(`Upload init failed: ${response.statusText}`);
     }
-    
+
     const result = await response.json();
     console.log("Upload Init Response:", result);
     return result;
@@ -132,14 +132,14 @@ export const eventService = {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      
+
       xhr.upload.addEventListener("progress", (event) => {
         if (event.lengthComputable) {
           const progress = Math.round((event.loaded / event.total) * 100);
           onProgress(progress);
         }
       });
-      
+
       xhr.addEventListener("load", () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve();
@@ -147,11 +147,11 @@ export const eventService = {
           reject(new Error(`S3 upload failed with status ${xhr.status}`));
         }
       });
-      
+
       xhr.addEventListener("error", () => {
         reject(new Error("S3 upload failed"));
       });
-      
+
       xhr.open("PUT", uploadUrl);
       xhr.setRequestHeader("Content-Type", contentType);
       xhr.send(file);
@@ -164,9 +164,9 @@ export const eventService = {
     // Production API: https://moments-api.moibook.in/api/uploads/complete
 
     const apiUrl = "https://mocki.io/v1/c76dbf8b-2949-40f3-92e7-1df327ca6174";
-    
+
     console.log("Upload Complete Payload:", JSON.stringify(payload, null, 2));
-    
+
     // For testing, generate mock response
     // TODO: Replace with actual API call
     // const mockResponse: UploadCompleteResponse = {

@@ -3245,9 +3245,9 @@
 <g id="qr">
 <rect id="qr-code" x="503" y="1002" width="581" height="581" fill="url(#pattern1_1_13053)"/>
 </g>
-<text id="{{orgWebsiteUrl}}" fill="black" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="36" font-weight="600" letter-spacing="0em"><tspan x="279" y="1991.09">{{orgWebsiteUrl}}</tspan></text>
-<text id="{{orgPhone}}" fill="black" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="36" font-weight="600" letter-spacing="0em"><tspan x="1017" y="1991.09">{{orgPhone}}</tspan></text>
-<text id="{{organisationName}}" fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="50" font-weight="500" letter-spacing="0em"><tspan x="538.104" y="309.682">{{organisationName}}</tspan></text>
+<text id="{{orgWebsiteUrl}}" fill="black" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="36" font-weight="600" letter-spacing="0em"><tspan data-label="Organisation website URL" data-default-value="https://google.com" max-characters="50" x="279" y="1991.09">{{orgWebsiteUrl}}</tspan></text>
+<text id="{{orgPhone}}" fill="black" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="36" font-weight="600" letter-spacing="0em"><tspan data-label="Organisation phone" data-default-value="+91 1234567890" max-characters="20" x="1017" y="1991.09">{{orgPhone}}</tspan></text>
+<text id="{{organisationName}}" fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="50" font-weight="500" letter-spacing="0em"><tspan data-label="Organisation name" data-default-value="GOOGLE PVT. LTD." max-characters="50" x="538.104" y="309.682">{{organisationName}}</tspan></text>
 </g>
 <defs>
 <pattern id="pattern0_1_13053" patternContentUnits="objectBoundingBox" width="1" height="1">
