@@ -114,3 +114,38 @@ export interface UploadCompleteResponse {
   status: string;
   files: UploadCompleteFileResponse[];
 }
+
+// API URL Types
+export interface ApiUrlItem {
+  Api_id: string;
+  Status: "active" | "revoked";
+  Expires_at: string;
+  Api_url: string;
+}
+
+export interface ApiUrlsResponse {
+  message: string;
+  Data: ApiUrlItem[];
+}
+
+export interface GenerateApiPayload {
+  action: string;
+}
+
+export interface GenerateApiResponse {
+  api_id: string;
+  api_url: string;
+  status: string;
+  expires_at: string;
+}
+
+export interface RevokeApiPayload {
+  api_id: string;
+  status: string;
+  revoke_at: string;
+}
+
+export interface RevokeApiResponse {
+  Status: string;
+  Message: string;
+}

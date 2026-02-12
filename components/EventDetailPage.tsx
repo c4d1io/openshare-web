@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react"
+import React from "react";
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -23,6 +23,12 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  Clock,
+  Shield,
+  ShieldOff,
+  Plus,
+  ExternalLink,
+  Trash2,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/components/contexts/AuthContext";
@@ -37,7 +43,11 @@ import {
   type CertificateTemplate,
   type TemplateVariable,
 } from "@/lib/services/certificateService";
-import type { MediaItem, UploadInitFileResponse } from "@/lib/types/event";
+import type {
+  MediaItem,
+  UploadInitFileResponse,
+  ApiUrlItem,
+} from "@/lib/types/event";
 
 interface EventDetailPageProps {
   eventId: string;
@@ -58,40 +68,56 @@ interface UploadingFile {
   errorMessage?: string;
 }
 
-export default function EventDetailPage({ eventId, onBack }: EventDetailPageProps) {
+export default function EventDetailPage({
+  eventId,
+  onBack,
+}: EventDetailPageProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("media");
-  
+
   // Media state
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [isLoadingMedia, setIsLoadingMedia] = useState(true);
   const [mediaOffset, setMediaOffset] = useState(0);
   const [hasMoreMedia, setHasMoreMedia] = useState(true);
   const [isLoadingMoreMedia, setIsLoadingMoreMedia] = useState(false);
-  
+
   // QR Code state
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [isLoadingQR, setIsLoadingQR] = useState(false);
 
   // Certificate state
   const certificates = getCertificateList();
-  const [selectedCertificate, setSelectedCertificate] = useState<CertificateTemplate>(certificates[0]);
-  const [certificateSvgContent, setCertificateSvgContent] = useState<string | null>(null);
+  const [selectedCertificate, setSelectedCertificate] =
+    useState<CertificateTemplate>(certificates[0]);
+  const [certificateSvgContent, setCertificateSvgContent] = useState<
+    string | null
+  >(null);
   const [isLoadingCertificate, setIsLoadingCertificate] = useState(false);
   const [qrBase64, setQrBase64] = useState<string | null>(null);
   const [rawSvgText, setRawSvgText] = useState<string | null>(null);
-  const [templateVariables, setTemplateVariables] = useState<TemplateVariable[]>([]);
+  const [templateVariables, setTemplateVariables] = useState<
+    TemplateVariable[]
+  >([]);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
-  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
-  const [thumbnailSvgs, setThumbnailSvgs] = useState<Record<string, string>>({});
-  
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [thumbnailSvgs, setThumbnailSvgs] = useState<Record<string, string>>(
+    {},
+  );
+
   // Media viewer state
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  
-  // Webhook state
-  const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
-  const [isCopied, setIsCopied] = useState(false);
+
+  // API URL state
+  const [apiUrls, setApiUrls] = useState<ApiUrlItem[]>([]);
+  const [isLoadingApis, setIsLoadingApis] = useState(false);
+  const [isGeneratingApi, setIsGeneratingApi] = useState(false);
+  const [revokingApiId, setRevokingApiId] = useState<string | null>(null);
+  const [copiedApiId, setCopiedApiId] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Upload state
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
@@ -102,10 +128,30 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tabs = [
-    { id: "media" as TabType, label: "Media Gallery", icon: Images, description: "View all photos and videos" },
-    { id: "uploads" as TabType, label: "Upload", icon: Upload, description: "Add new media" },
-    { id: "qrcode" as TabType, label: "QR Code", icon: QrCode, description: "Share event QR" },
-    { id: "webhook" as TabType, label: "API", icon: Link2, description: "Integration URL" },
+    {
+      id: "media" as TabType,
+      label: "Media Gallery",
+      icon: Images,
+      description: "View all photos and videos",
+    },
+    {
+      id: "uploads" as TabType,
+      label: "Upload",
+      icon: Upload,
+      description: "Add new media",
+    },
+    {
+      id: "qrcode" as TabType,
+      label: "QR Code",
+      icon: QrCode,
+      description: "Share event QR",
+    },
+    {
+      id: "webhook" as TabType,
+      label: "API",
+      icon: Link2,
+      description: "Integration URL",
+    },
   ];
 
   // Accepted file types
@@ -116,32 +162,35 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
   const acceptedExtensions = ".jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.avi";
 
   // Fetch media items
-  const fetchMedia = useCallback(async (offset: number = 0, append: boolean = false) => {
-    if (offset === 0) {
-      setIsLoadingMedia(true);
-    } else {
-      setIsLoadingMoreMedia(true);
-    }
-
-    try {
-      const response = await eventService.getEventMedia(eventId, 10, offset);
-      const newItems = response.data.results;
-      
-      if (append) {
-        setMediaItems(prev => [...prev, ...newItems]);
+  const fetchMedia = useCallback(
+    async (offset: number = 0, append: boolean = false) => {
+      if (offset === 0) {
+        setIsLoadingMedia(true);
       } else {
-        setMediaItems(newItems);
+        setIsLoadingMoreMedia(true);
       }
-      
-      setHasMoreMedia(newItems.length === 10);
-      setMediaOffset(offset + newItems.length);
-    } catch (error) {
-      console.error("Failed to fetch media:", error);
-    } finally {
-      setIsLoadingMedia(false);
-      setIsLoadingMoreMedia(false);
-    }
-  }, [eventId]);
+
+      try {
+        const response = await eventService.getEventMedia(eventId, 10, offset);
+        const newItems = response.data.results;
+
+        if (append) {
+          setMediaItems((prev) => [...prev, ...newItems]);
+        } else {
+          setMediaItems(newItems);
+        }
+
+        setHasMoreMedia(newItems.length === 10);
+        setMediaOffset(offset + newItems.length);
+      } catch (error) {
+        console.error("Failed to fetch media:", error);
+      } finally {
+        setIsLoadingMedia(false);
+        setIsLoadingMoreMedia(false);
+      }
+    },
+    [eventId],
+  );
 
   // Fetch QR code
   const fetchQRCode = useCallback(async () => {
@@ -232,7 +281,7 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
       setThumbnailSvgs(svgs);
     };
     loadThumbnails();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Download certificate as SVG file
@@ -252,7 +301,7 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
   // Helper to determine if media is video
   const isVideo = (url: string): boolean => {
     const videoExtensions = [".mp4", ".webm", ".ogg", ".mov", ".avi"];
-    return videoExtensions.some(ext => url.toLowerCase().includes(ext));
+    return videoExtensions.some((ext) => url.toLowerCase().includes(ext));
   };
 
   // Handle download
@@ -274,18 +323,107 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
     }
   };
 
-  // Copy webhook URL
-  const copyWebhookUrl = () => {
-    if (webhookUrl) {
-      navigator.clipboard.writeText(webhookUrl);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
+  // Fetch API URLs
+  const fetchApiUrls = useCallback(async () => {
+    setIsLoadingApis(true);
+    setApiError(null);
+    try {
+      const response = await eventService.getApiUrls();
+      setApiUrls(response.Data || []);
+    } catch (error) {
+      console.error("Failed to fetch API URLs:", error);
+      setApiError("Failed to load API URLs. Please try again.");
+    } finally {
+      setIsLoadingApis(false);
+    }
+  }, []);
+
+  // Fetch API URLs when tab is selected
+  useEffect(() => {
+    if (activeTab === "webhook") {
+      fetchApiUrls();
+    }
+  }, [activeTab, fetchApiUrls]);
+
+  // Generate new API URL
+  const handleGenerateApiUrl = async () => {
+    setIsGeneratingApi(true);
+    setApiError(null);
+    try {
+      const response = await eventService.generateApiUrl({
+        action: "GENERATE_API",
+      });
+      // Add the new API URL to the list
+      const newApiItem: ApiUrlItem = {
+        Api_id: response.api_id,
+        Api_url: response.api_url,
+        Status: response.status as "active",
+        Expires_at: response.expires_at,
+      };
+      setApiUrls((prev) => [newApiItem, ...prev]);
+    } catch (error) {
+      console.error("Failed to generate API URL:", error);
+      setApiError("Failed to generate API URL. Please try again.");
+    } finally {
+      setIsGeneratingApi(false);
     }
   };
 
-  // Generate webhook URL
-  const generateWebhookUrl = () => {
-    setWebhookUrl(`https://moments-api.moibook.in/api/webhook/${eventId}/upload`);
+  // Revoke API URL
+  const handleRevokeApiUrl = async (apiId: string) => {
+    setRevokingApiId(apiId);
+    setApiError(null);
+    try {
+      await eventService.revokeApiUrl({
+        api_id: apiId,
+        status: "revoke",
+        revoke_at: new Date().toISOString(),
+      });
+      // Update the status in the local list
+      setApiUrls((prev) =>
+        prev.map((item) =>
+          item.Api_id === apiId ? { ...item, Status: "revoked" } : item,
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to revoke API URL:", error);
+      setApiError("Failed to revoke API URL. Please try again.");
+    } finally {
+      setRevokingApiId(null);
+    }
+  };
+
+  // Copy API URL
+  const copyApiUrl = (apiId: string, url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedApiId(apiId);
+    setTimeout(() => setCopiedApiId(null), 2000);
+  };
+
+  // Format expiry date
+  const formatExpiryDate = (utcDate: string): string => {
+    try {
+      const date = new Date(utcDate);
+      return date.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch {
+      return utcDate;
+    }
+  };
+
+  // Check if expired
+  const isExpired = (utcDate: string): boolean => {
+    try {
+      return new Date(utcDate) < new Date();
+    } catch {
+      return false;
+    }
   };
 
   // Handle file selection
@@ -297,8 +435,11 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
     const invalidFiles: string[] = [];
 
     Array.from(files).forEach((file) => {
-      const isValidType = [...acceptedTypes.image, ...acceptedTypes.video].includes(file.type);
-      
+      const isValidType = [
+        ...acceptedTypes.image,
+        ...acceptedTypes.video,
+      ].includes(file.type);
+
       if (isValidType) {
         validFiles.push({
           file,
@@ -320,7 +461,7 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
     }
 
     if (validFiles.length > 0) {
-      setUploadingFiles(prev => [...prev, ...validFiles]);
+      setUploadingFiles((prev) => [...prev, ...validFiles]);
       startUpload([...uploadingFiles, ...validFiles]);
     }
 
@@ -334,12 +475,15 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
-    
+
     const validFiles: UploadingFile[] = [];
-    
+
     Array.from(files).forEach((file) => {
-      const isValidType = [...acceptedTypes.image, ...acceptedTypes.video].includes(file.type);
-      
+      const isValidType = [
+        ...acceptedTypes.image,
+        ...acceptedTypes.video,
+      ].includes(file.type);
+
       if (isValidType) {
         validFiles.push({
           file,
@@ -354,7 +498,7 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
     });
 
     if (validFiles.length > 0) {
-      setUploadingFiles(prev => [...prev, ...validFiles]);
+      setUploadingFiles((prev) => [...prev, ...validFiles]);
       startUpload([...uploadingFiles, ...validFiles]);
     }
   };
@@ -362,8 +506,8 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
   // Start upload process
   const startUpload = async (files: UploadingFile[]) => {
     if (isUploading || files.length === 0) return;
-    
-    const pendingFiles = files.filter(f => f.status === "pending");
+
+    const pendingFiles = files.filter((f) => f.status === "pending");
     if (pendingFiles.length === 0) return;
 
     setIsUploading(true);
@@ -373,7 +517,7 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
     try {
       // Step 1: Initialize upload to get pre-signed URLs
       const initPayload = {
-        files: pendingFiles.map(f => ({
+        files: pendingFiles.map((f) => ({
           file_name: f.name,
           mime_type: f.type,
           size_bytes: f.size,
@@ -383,19 +527,23 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
       const initResponse = await eventService.initUpload(initPayload);
 
       // Update files with upload info
-      setUploadingFiles(prev => 
-        prev.map(f => {
-          const uploadInfo = initResponse.files.find(info => info.file_name === f.name);
+      setUploadingFiles((prev) =>
+        prev.map((f) => {
+          const uploadInfo = initResponse.files.find(
+            (info) => info.file_name === f.name,
+          );
           if (uploadInfo && f.status === "pending") {
             return { ...f, uploadInfo, status: "uploading" as const };
           }
           return f;
-        })
+        }),
       );
 
       // Step 2: Upload each file to S3
       const uploadPromises = pendingFiles.map(async (uploadFile) => {
-        const uploadInfo = initResponse.files.find(info => info.file_name === uploadFile.name);
+        const uploadInfo = initResponse.files.find(
+          (info) => info.file_name === uploadFile.name,
+        );
         if (!uploadInfo) return;
 
         try {
@@ -404,27 +552,33 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
             uploadFile.file,
             uploadInfo.content_type,
             (progress) => {
-              setUploadingFiles(prev =>
-                prev.map(f =>
-                  f.id === uploadFile.id ? { ...f, progress } : f
-                )
+              setUploadingFiles((prev) =>
+                prev.map((f) =>
+                  f.id === uploadFile.id ? { ...f, progress } : f,
+                ),
               );
-            }
+            },
           );
 
           // Mark as completed
-          setUploadingFiles(prev =>
-            prev.map(f =>
-              f.id === uploadFile.id ? { ...f, status: "completed" as const, progress: 100 } : f
-            )
+          setUploadingFiles((prev) =>
+            prev.map((f) =>
+              f.id === uploadFile.id
+                ? { ...f, status: "completed" as const, progress: 100 }
+                : f,
+            ),
           );
         } catch (error) {
-          setUploadingFiles(prev =>
-            prev.map(f =>
+          setUploadingFiles((prev) =>
+            prev.map((f) =>
               f.id === uploadFile.id
-                ? { ...f, status: "error" as const, errorMessage: "Upload failed" }
-                : f
-            )
+                ? {
+                    ...f,
+                    status: "error" as const,
+                    errorMessage: "Upload failed",
+                  }
+                : f,
+            ),
           );
         }
       });
@@ -432,7 +586,7 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
       await Promise.all(uploadPromises);
 
       // Step 3: Complete upload
-      const completedFiles = initResponse.files.map(f => ({
+      const completedFiles = initResponse.files.map((f) => ({
         file_id: f.file_id,
         s3_key: f.s3_key,
       }));
@@ -447,7 +601,6 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
         fetchMedia(0);
         setActiveTab("media");
       }, 1500);
-
     } catch (error) {
       console.error("Upload failed:", error);
       setUploadError("Failed to initialize upload. Please try again.");
@@ -465,16 +618,20 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
 
   // Remove single file
   const removeFile = (fileId: string) => {
-    setUploadingFiles(prev => prev.filter(f => f.id !== fileId));
+    setUploadingFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
   // Get upload stats
   const getUploadStats = () => {
     const total = uploadingFiles.length;
-    const completed = uploadingFiles.filter(f => f.status === "completed").length;
-    const uploading = uploadingFiles.filter(f => f.status === "uploading").length;
-    const pending = uploadingFiles.filter(f => f.status === "pending").length;
-    const errors = uploadingFiles.filter(f => f.status === "error").length;
+    const completed = uploadingFiles.filter(
+      (f) => f.status === "completed",
+    ).length;
+    const uploading = uploadingFiles.filter(
+      (f) => f.status === "uploading",
+    ).length;
+    const pending = uploadingFiles.filter((f) => f.status === "pending").length;
+    const errors = uploadingFiles.filter((f) => f.status === "error").length;
     return { total, completed, uploading, pending, errors };
   };
 
@@ -510,7 +667,9 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
               <span className="font-medium">Back to Events</span>
             </motion.button>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Event Dashboard</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                Event Dashboard
+              </h2>
               <p className="text-sm text-gray-500 mt-1">ID: {eventId}</p>
             </div>
           </div>
@@ -531,10 +690,14 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                   whileHover={{ scale: 1.02, x: 4 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isActive ? "text-white" : "text-gray-400"}`} />
+                  <Icon
+                    className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isActive ? "text-white" : "text-gray-400"}`}
+                  />
                   <div className="text-left flex-1">
                     <div className="font-medium">{tab.label}</div>
-                    <div className={`text-xs mt-0.5 ${isActive ? "text-white/80" : "text-gray-400"}`}>
+                    <div
+                      className={`text-xs mt-0.5 ${isActive ? "text-white/80" : "text-gray-400"}`}
+                    >
                       {tab.description}
                     </div>
                   </div>
@@ -558,11 +721,13 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                 <ArrowLeft className="w-5 h-5 text-gray-600" />
               </motion.button>
               <div className="flex-1 text-center">
-                <h1 className="text-sm font-semibold text-gray-900">Event {eventId}</h1>
+                <h1 className="text-sm font-semibold text-gray-900">
+                  Event {eventId}
+                </h1>
               </div>
               <div className="w-9" />
             </div>
-            
+
             <div className="flex space-x-2 mt-3 overflow-x-auto scrollbar-hide">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
@@ -599,8 +764,12 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                     transition={{ duration: 0.3 }}
                   >
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">Media Gallery</h2>
-                      <p className="text-gray-500 mt-1">All photos and videos from your event</p>
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        Media Gallery
+                      </h2>
+                      <p className="text-gray-500 mt-1">
+                        All photos and videos from your event
+                      </p>
                     </div>
 
                     {isLoadingMedia ? (
@@ -612,9 +781,12 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                         <div className="w-24 h-24 bg-gradient-to-br from-rose-100 to-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
                           <Images className="w-12 h-12 text-rose-400" />
                         </div>
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">No media yet</h3>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                          No media yet
+                        </h3>
                         <p className="text-gray-500 max-w-md mx-auto mb-6">
-                          Upload photos and videos or share the QR code with guests to start collecting memories.
+                          Upload photos and videos or share the QR code with
+                          guests to start collecting memories.
                         </p>
                         <motion.button
                           onClick={() => setActiveTab("uploads")}
@@ -664,7 +836,9 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                                 ) : (
                                   <>
                                     <img
-                                      src={item.media_file || "/placeholder.svg"}
+                                      src={
+                                        item.media_file || "/placeholder.svg"
+                                      }
                                       alt={item.name}
                                       className="w-full h-full object-cover"
                                     />
@@ -731,8 +905,12 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                     transition={{ duration: 0.3 }}
                   >
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">Upload Media</h2>
-                      <p className="text-gray-500 mt-1">Add photos and videos to your event</p>
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        Upload Media
+                      </h2>
+                      <p className="text-gray-500 mt-1">
+                        Add photos and videos to your event
+                      </p>
                     </div>
 
                     <div className="max-w-2xl mx-auto">
@@ -745,7 +923,9 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                         >
                           <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                           <div className="flex-1">
-                            <p className="text-red-700 text-sm">{uploadError}</p>
+                            <p className="text-red-700 text-sm">
+                              {uploadError}
+                            </p>
                           </div>
                           <button onClick={() => setUploadError(null)}>
                             <X className="w-4 h-4 text-red-400 hover:text-red-600" />
@@ -768,9 +948,10 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                             Drag and drop files here
                           </h3>
                           <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                            or click to browse. Supports JPG, PNG, WEBP images and MP4, WebM, MOV videos.
+                            or click to browse. Supports JPG, PNG, WEBP images
+                            and MP4, WebM, MOV videos.
                           </p>
-                          
+
                           <input
                             ref={fileInputRef}
                             type="file"
@@ -798,16 +979,24 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                         <div className="mt-6 bg-white rounded-xl border border-gray-200 overflow-hidden">
                           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                             <p className="font-medium text-gray-700">
-                              {uploadingFiles.length} file{uploadingFiles.length > 1 ? "s" : ""} selected
+                              {uploadingFiles.length} file
+                              {uploadingFiles.length > 1 ? "s" : ""} selected
                             </p>
                           </div>
                           <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                             {uploadingFiles.map((file) => (
-                              <div key={file.id} className="flex items-center px-4 py-3 space-x-3">
+                              <div
+                                key={file.id}
+                                className="flex items-center px-4 py-3 space-x-3"
+                              >
                                 {getFileIcon(file.type)}
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                                  <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {file.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {formatFileSize(file.size)}
+                                  </p>
                                 </div>
                                 <button
                                   onClick={() => removeFile(file.id)}
@@ -834,13 +1023,19 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                     transition={{ duration: 0.3 }}
                   >
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">Event Certificate</h2>
-                      <p className="text-gray-500 mt-1">Choose a certificate template with your event QR code</p>
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        Event Certificate
+                      </h2>
+                      <p className="text-gray-500 mt-1">
+                        Choose a certificate template with your event QR code
+                      </p>
                     </div>
 
                     {/* Certificate Template Thumbnail Selector */}
                     <div className="mb-6">
-                      <p className="text-sm font-medium text-gray-700 mb-3">Select Template</p>
+                      <p className="text-sm font-medium text-gray-700 mb-3">
+                        Select Template
+                      </p>
                       <div className="flex space-x-4 overflow-x-auto pb-3">
                         {certificates.map((cert) => {
                           const isSelected = selectedCertificate.id === cert.id;
@@ -858,11 +1053,16 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                               style={{ width: 160 }}
                             >
                               {/* Thumbnail Preview */}
-                              <div className="w-full bg-gray-50 overflow-hidden" style={{ height: 110 }}>
+                              <div
+                                className="w-full bg-gray-50 overflow-hidden"
+                                style={{ height: 110 }}
+                              >
                                 {thumbnailSvgs[cert.id] ? (
                                   <div
                                     className="certificate-thumbnail"
-                                    dangerouslySetInnerHTML={{ __html: thumbnailSvgs[cert.id] }}
+                                    dangerouslySetInnerHTML={{
+                                      __html: thumbnailSvgs[cert.id],
+                                    }}
                                   />
                                 ) : (
                                   <div className="flex items-center justify-center h-full">
@@ -871,11 +1071,13 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                                 )}
                               </div>
                               {/* Label */}
-                              <div className={`px-3 py-2.5 text-center text-xs font-semibold ${
-                                isSelected
-                                  ? "bg-gradient-to-r from-rose-50 to-amber-50 text-rose-700"
-                                  : "bg-white text-gray-600"
-                              }`}>
+                              <div
+                                className={`px-3 py-2.5 text-center text-xs font-semibold ${
+                                  isSelected
+                                    ? "bg-gradient-to-r from-rose-50 to-amber-50 text-rose-700"
+                                    : "bg-white text-gray-600"
+                                }`}
+                              >
                                 {cert.name}
                               </div>
                             </motion.button>
@@ -896,7 +1098,9 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                               </div>
                               <div>
                                 <h3 className="font-bold text-base">Preview</h3>
-                                <p className="text-white/80 text-xs">{selectedCertificate.name}</p>
+                                <p className="text-white/80 text-xs">
+                                  {selectedCertificate.name}
+                                </p>
                               </div>
                             </div>
 
@@ -918,7 +1122,9 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                               <div className="flex flex-col items-center justify-center py-16">
                                 <Loader2 className="w-8 h-8 animate-spin text-rose-400 mb-3" />
                                 <p className="text-sm text-gray-500">
-                                  {isLoadingQR ? "Loading QR code..." : "Processing certificate..."}
+                                  {isLoadingQR
+                                    ? "Loading QR code..."
+                                    : "Processing certificate..."}
                                 </p>
                               </div>
                             ) : certificateSvgContent ? (
@@ -926,7 +1132,9 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                                 <div
                                   className="certificate-preview"
                                   style={{ maxHeight: "70vh" }}
-                                  dangerouslySetInnerHTML={{ __html: certificateSvgContent }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: certificateSvgContent,
+                                  }}
                                 />
                               </div>
                             ) : qrCodeUrl && !qrBase64 ? (
@@ -934,8 +1142,12 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                                 <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
                                   <AlertCircle className="w-8 h-8 text-amber-500" />
                                 </div>
-                                <p className="text-gray-600 mb-2 font-medium">Could not process QR code image</p>
-                                <p className="text-gray-400 text-sm mb-4">The QR code URL may have CORS restrictions</p>
+                                <p className="text-gray-600 mb-2 font-medium">
+                                  Could not process QR code image
+                                </p>
+                                <p className="text-gray-400 text-sm mb-4">
+                                  The QR code URL may have CORS restrictions
+                                </p>
                                 <motion.button
                                   onClick={fetchQRCode}
                                   className="text-rose-500 font-medium text-sm"
@@ -949,7 +1161,9 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                   <QrCode className="w-8 h-8 text-gray-400" />
                                 </div>
-                                <p className="text-gray-500 mb-4">Failed to load QR code</p>
+                                <p className="text-gray-500 mb-4">
+                                  Failed to load QR code
+                                </p>
                                 <motion.button
                                   onClick={fetchQRCode}
                                   className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-rose-400 to-amber-400 text-white rounded-lg font-medium shadow-md"
@@ -973,8 +1187,12 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                               <FileImage className="w-4 h-4 text-white" />
                             </div>
                             <div>
-                              <h3 className="font-bold text-base text-white">Certificate Details</h3>
-                              <p className="text-white/60 text-xs">Fill in all required fields</p>
+                              <h3 className="font-bold text-base text-white">
+                                Certificate Details
+                              </h3>
+                              <p className="text-white/60 text-xs">
+                                Fill in all required fields
+                              </p>
                             </div>
                           </div>
 
@@ -983,18 +1201,24 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                               templateVariables.map((variable) => {
                                 const value = formValues[variable.key] ?? "";
                                 const isTouched = touchedFields[variable.key];
-                                const isEmpty = isTouched && value.trim() === "";
+                                const isEmpty =
+                                  isTouched && value.trim() === "";
                                 return (
                                   <div key={variable.key}>
                                     <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                                       {variable.label}
-                                      <span className="text-rose-400 ml-0.5">*</span>
+                                      <span className="text-rose-400 ml-0.5">
+                                        *
+                                      </span>
                                     </label>
                                     <input
                                       type="text"
                                       value={value}
                                       maxLength={variable.maxCharacters}
-                                      placeholder={variable.defaultValue || `Enter ${variable.label.toLowerCase()}`}
+                                      placeholder={
+                                        variable.defaultValue ||
+                                        `Enter ${variable.label.toLowerCase()}`
+                                      }
                                       onChange={(e) =>
                                         setFormValues((prev) => ({
                                           ...prev,
@@ -1015,7 +1239,9 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                                     />
                                     <div className="flex items-center justify-between mt-1">
                                       {isEmpty ? (
-                                        <p className="text-xs text-rose-500">This field is required</p>
+                                        <p className="text-xs text-rose-500">
+                                          This field is required
+                                        </p>
                                       ) : (
                                         <span />
                                       )}
@@ -1029,11 +1255,15 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                             ) : isLoadingCertificate ? (
                               <div className="flex flex-col items-center justify-center py-12">
                                 <Loader2 className="w-6 h-6 animate-spin text-gray-300 mb-2" />
-                                <p className="text-sm text-gray-400">Loading fields...</p>
+                                <p className="text-sm text-gray-400">
+                                  Loading fields...
+                                </p>
                               </div>
                             ) : (
                               <div className="text-center py-12">
-                                <p className="text-sm text-gray-400">No custom fields for this template</p>
+                                <p className="text-sm text-gray-400">
+                                  No custom fields for this template
+                                </p>
                               </div>
                             )}
                           </div>
@@ -1052,57 +1282,250 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">API Integration</h2>
-                      <p className="text-gray-500 mt-1">Use this URL to programmatically upload media</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900">
+                          API Integration
+                        </h2>
+                        <p className="text-gray-500 mt-1">
+                          Generate and manage API URLs to programmatically
+                          upload media
+                        </p>
+                      </div>
+                      <motion.button
+                        onClick={handleGenerateApiUrl}
+                        disabled={isGeneratingApi}
+                        className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-rose-400 to-amber-400 text-white rounded-xl font-medium shadow-lg disabled:opacity-60 self-start sm:self-auto"
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                      >
+                        {isGeneratingApi ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Plus className="w-5 h-5" />
+                        )}
+                        <span>
+                          {isGeneratingApi
+                            ? "Generating..."
+                            : "Generate API URL"}
+                        </span>
+                      </motion.button>
                     </div>
 
-                    <div className="max-w-2xl mx-auto">
-                      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-                        <div className="flex items-start space-x-4 mb-6">
-                          <div className="w-12 h-12 bg-gradient-to-br from-rose-100 to-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                            <Link2 className="w-6 h-6 text-rose-400" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">Webhook URL</h3>
-                            <p className="text-gray-500 text-sm mt-1">
-                              Send POST requests to this URL to upload media from external sources
-                            </p>
-                          </div>
-                        </div>
+                    {/* Error */}
+                    {apiError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-3"
+                      >
+                        <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-red-700 text-sm flex-1">
+                          {apiError}
+                        </p>
+                        <button onClick={() => setApiError(null)}>
+                          <X className="w-4 h-4 text-red-400 hover:text-red-600" />
+                        </button>
+                      </motion.div>
+                    )}
 
-                        {webhookUrl ? (
-                          <div className="space-y-4">
-                            <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <code className="flex-1 text-sm text-gray-700 break-all">{webhookUrl}</code>
-                              <motion.button
-                                onClick={copyWebhookUrl}
-                                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                              >
-                                {isCopied ? (
-                                  <Check className="w-5 h-5 text-green-500" />
-                                ) : (
-                                  <Copy className="w-5 h-5 text-gray-500" />
-                                )}
-                              </motion.button>
-                            </div>
-                            <p className="text-xs text-gray-400">
-                              Include this URL in your application to enable automatic media uploads
-                            </p>
+                    <div className="max-w-3xl">
+                      {isLoadingApis ? (
+                        <div className="flex items-center justify-center py-20">
+                          <Loader2 className="w-8 h-8 animate-spin text-rose-400" />
+                        </div>
+                      ) : apiUrls.length === 0 ? (
+                        <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
+                          <div className="w-24 h-24 bg-gradient-to-br from-rose-100 to-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Link2 className="w-12 h-12 text-rose-400" />
                           </div>
-                        ) : (
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                            No API URLs yet
+                          </h3>
+                          <p className="text-gray-500 max-w-md mx-auto mb-6">
+                            Generate an API URL to upload photos and videos
+                            programmatically from your applications or services.
+                          </p>
                           <motion.button
-                            onClick={generateWebhookUrl}
-                            className="w-full py-3 bg-gradient-to-r from-rose-400 to-amber-400 text-white rounded-xl font-medium shadow-lg"
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
+                            onClick={handleGenerateApiUrl}
+                            disabled={isGeneratingApi}
+                            className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-rose-400 to-amber-400 text-white rounded-xl font-medium shadow-lg disabled:opacity-60"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                           >
-                            Generate Webhook URL
+                            {isGeneratingApi ? (
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                            ) : (
+                              <Plus className="w-5 h-5" />
+                            )}
+                            <span>
+                              {isGeneratingApi
+                                ? "Generating..."
+                                : "Generate Your First API URL"}
+                            </span>
                           </motion.button>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {apiUrls.map((apiItem, index) => {
+                            const expired = isExpired(apiItem.Expires_at);
+                            const isRevoked = apiItem.Status === "revoked";
+                            const isActive =
+                              apiItem.Status === "active" && !expired;
+                            const isRevoking = revokingApiId === apiItem.Api_id;
+                            const isCopied = copiedApiId === apiItem.Api_id;
+
+                            return (
+                              <motion.div
+                                key={apiItem.Api_id}
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
+                                  isActive
+                                    ? "border-green-200"
+                                    : isRevoked
+                                      ? "border-red-100"
+                                      : "border-amber-200"
+                                }`}
+                              >
+                                {/* Card Header */}
+                                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                                  <div className="flex items-center space-x-3">
+                                    <div
+                                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                        isActive
+                                          ? "bg-green-100"
+                                          : isRevoked
+                                            ? "bg-red-50"
+                                            : "bg-amber-100"
+                                      }`}
+                                    >
+                                      {isActive ? (
+                                        <Shield className="w-5 h-5 text-green-600" />
+                                      ) : isRevoked ? (
+                                        <ShieldOff className="w-5 h-5 text-red-400" />
+                                      ) : (
+                                        <Clock className="w-5 h-5 text-amber-600" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center space-x-2">
+                                        <span className="font-semibold text-gray-900 text-sm">
+                                          {apiItem.Api_id}
+                                        </span>
+                                        <span
+                                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                            isActive
+                                              ? "bg-green-100 text-green-700"
+                                              : isRevoked
+                                                ? "bg-red-100 text-red-600"
+                                                : "bg-amber-100 text-amber-700"
+                                          }`}
+                                        >
+                                          {isRevoked
+                                            ? "Revoked"
+                                            : expired
+                                              ? "Expired"
+                                              : "Active"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center space-x-1 mt-0.5">
+                                        <Clock className="w-3 h-3 text-gray-400" />
+                                        <span className="text-xs text-gray-500">
+                                          {expired ? "Expired" : "Expires"}:{" "}
+                                          {formatExpiryDate(apiItem.Expires_at)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex items-center space-x-2">
+                                    {isActive && (
+                                      <motion.button
+                                        onClick={() =>
+                                          handleRevokeApiUrl(apiItem.Api_id)
+                                        }
+                                        disabled={isRevoking}
+                                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                                        whileHover={{ scale: 1.03 }}
+                                        whileTap={{ scale: 0.97 }}
+                                        title="Revoke this API URL"
+                                      >
+                                        {isRevoking ? (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        )}
+                                        <span>
+                                          {isRevoking
+                                            ? "Revoking..."
+                                            : "Revoke"}
+                                        </span>
+                                      </motion.button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Card Body - URL */}
+                                <div className="px-5 py-4">
+                                  <p className="text-xs text-gray-500 font-medium mb-2">
+                                    API Endpoint
+                                  </p>
+                                  <div className="flex items-center space-x-2">
+                                    <div
+                                      className={`flex-1 p-3 rounded-lg border text-sm font-mono break-all ${
+                                        isActive
+                                          ? "bg-gray-50 border-gray-200 text-gray-800"
+                                          : "bg-gray-50 border-gray-100 text-gray-400"
+                                      }`}
+                                    >
+                                      {apiItem.Api_url}
+                                    </div>
+                                    <div className="flex flex-col space-y-1.5">
+                                      <motion.button
+                                        onClick={() =>
+                                          copyApiUrl(
+                                            apiItem.Api_id,
+                                            apiItem.Api_url,
+                                          )
+                                        }
+                                        className="p-2.5 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                                        whileHover={{ scale: 1.1 }}
+                                        whileTap={{ scale: 0.9 }}
+                                        title="Copy URL"
+                                      >
+                                        {isCopied ? (
+                                          <Check className="w-4 h-4 text-green-500" />
+                                        ) : (
+                                          <Copy className="w-4 h-4 text-gray-500" />
+                                        )}
+                                      </motion.button>
+                                      {/* {isActive && (
+                                        <motion.button
+                                          onClick={() =>
+                                            window.open(
+                                              apiItem.Api_url,
+                                              "_blank",
+                                            )
+                                          }
+                                          className="p-2.5 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                                          whileHover={{ scale: 1.1 }}
+                                          whileTap={{ scale: 0.9 }}
+                                          title="Open in new tab"
+                                        >
+                                          <ExternalLink className="w-4 h-4 text-gray-500" />
+                                        </motion.button>
+                                      )} */}
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -1125,7 +1548,8 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
             <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center space-x-2">
                 <span className="font-medium text-gray-900">
-                  Uploading {uploadStats.total} item{uploadStats.total > 1 ? "s" : ""}
+                  Uploading {uploadStats.total} item
+                  {uploadStats.total > 1 ? "s" : ""}
                 </span>
               </div>
               <div className="flex items-center space-x-1">
@@ -1156,8 +1580,8 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                     {uploadStats.completed === uploadStats.total
                       ? "Upload complete"
                       : isUploading
-                      ? "Uploading..."
-                      : "Preparing..."}
+                        ? "Uploading..."
+                        : "Preparing..."}
                   </span>
                   {isUploading && uploadStats.completed < uploadStats.total && (
                     <button
@@ -1178,7 +1602,10 @@ export default function EventDetailPage({ eventId, onBack }: EventDetailPageProp
                     >
                       {getFileIcon(file.type)}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900 truncate" title={file.name}>
+                        <p
+                          className="text-sm text-gray-900 truncate"
+                          title={file.name}
+                        >
                           {file.name}
                         </p>
                         {file.status === "uploading" && (

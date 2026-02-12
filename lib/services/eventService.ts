@@ -10,6 +10,11 @@ import type {
   UploadInitResponse,
   UploadCompletePayload,
   UploadCompleteResponse,
+  ApiUrlsResponse,
+  GenerateApiPayload,
+  GenerateApiResponse,
+  RevokeApiPayload,
+  RevokeApiResponse,
 } from "@/lib/types/event";
 
 export const eventService = {
@@ -93,6 +98,102 @@ export const eventService = {
     const formData = new FormData();
     formData.append("image", file);
     return apiClient.upload<{ url: string }>("/api/upload-image", formData);
+  },
+
+  async getApiUrls(): Promise<ApiUrlsResponse> {
+    // TODO: Remove mock response and uncomment production API after deployment
+    // Production API: https://moments-api.moibook.in/api/api_urls
+    
+    // Mock response for testing
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+    
+    return {
+      message: "Fetch Successful",
+      Data: [
+        {
+          Api_id: "SDYE87",
+          Status: "active",
+          Expires_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
+          Api_url: "https://moibook-url/api/webhook/upload/SDYE87",
+        },
+        {
+          Api_id: "ABCD87",
+          Status: "revoked",
+          Expires_at: "2026-02-26T12:00:00Z",
+          Api_url: "https://moibook-url/api/webhook/upload/ABCD87",
+        },
+      ],
+    };
+
+    // const response = await fetch(apiUrl);
+    // if (!response.ok) {
+    //   throw new Error(`Failed to fetch API URLs: ${response.statusText}`);
+    // }
+    // return response.json();
+  },
+
+  async generateApiUrl(payload: GenerateApiPayload): Promise<GenerateApiResponse> {
+    // TODO: Remove mock response and uncomment production API after deployment
+    // Production API: https://moments-api.moibook.in/api/generate-apiurl
+    
+    console.log("Generate API URL Payload:", payload);
+    
+    // Mock response for testing
+    await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network delay
+    
+    const mockApiId = `API${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const mockResponse: GenerateApiResponse = {
+      api_id: mockApiId,
+      api_url: `https://moibook-url/api/webhook/upload/${mockApiId}`,
+      status: "active",
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+    };
+    
+    console.log("Generate API URL Response (mock):", mockResponse);
+    return mockResponse;
+
+    // const response = await fetch(apiUrl, {
+    //   method: "POST",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //   },
+    //   body: JSON.stringify(payload),
+    // });
+    // if (!response.ok) {
+    //   throw new Error(`Failed to generate API URL: ${response.statusText}`);
+    // }
+    // return response.json();
+  },
+
+  // Revoke an API URL
+  async revokeApiUrl(payload: RevokeApiPayload): Promise<RevokeApiResponse> {
+    // TODO: Remove mock response and uncomment production API after deployment
+    // Production API: https://moments-api.moibook.in/api/urls/revoke
+    
+    console.log("Revoke API URL Payload:", payload);
+    
+    // Mock response for testing
+    await new Promise(resolve => setTimeout(resolve, 600)); // Simulate network delay
+    
+    const mockResponse: RevokeApiResponse = {
+      Status: "success",
+      Message: "API Revoked Successfully",
+    };
+    
+    console.log("Revoke API URL Response (mock):", mockResponse);
+    return mockResponse;
+
+    // const response = await fetch(apiUrl, {
+    //   method: "POST",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //   },
+    //   body: JSON.stringify(payload),
+    // });
+    // if (!response.ok) {
+    //   throw new Error(`Failed to revoke API URL: ${response.statusText}`);
+    // }
+    // return response.json();
   },
 
   // Initialize upload - get pre-signed S3 URLs
